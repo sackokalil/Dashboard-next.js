@@ -5,7 +5,10 @@ import "./globals.css";
 //console.log(inter)
 
 export const metadata: Metadata = {
-  title: "Dashboard",
+  title: {
+    template: '%s | Tableau de bord Acme',
+    default : 'Tableau de bord Acme'
+  },
   description: "Exercice app Next.js Dashboard avec App Router",
 };
 
