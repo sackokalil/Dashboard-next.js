@@ -16,24 +16,14 @@ export const metadata : Metadata = {
 }
 
 
-export default async function Page({searchParams}: {searchParams?:{query?:string, page?:string}}){
+export default async function Page({searchParams}: {searchParams?: Promise<{query?:string, page?:string}>}) {
+    const params = await searchParams;
 
-    const query = searchParams?.query || ''
-    const currentPage = Number(searchParams?.page) || 1
+    const query = params?.query || ''
+    const currentPage = Number(params?.page) || 1
 
     const totalPages = await fetchInvoicesPages(query)
-    //dans Nextjs 15+, on ferait :
-   /* export default async function Page({
-        searchParams,
-        }: {
-        searchParams?: Promise<{ query?: string; page?: string }>
-        }) {
-        const params = await searchParams
-        const query = params?.query || ''
-        const currentPage = Number(params?.page) || 1
-
-        // ...
-    }*/
+    
 
     return (
         <div className="w-full">

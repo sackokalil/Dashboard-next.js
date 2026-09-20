@@ -5,9 +5,10 @@ import {lusitana} from '@/app/ui/fonts'
 import { AtSymbolIcon, ExclamationCircleIcon, KeyIcon} from '@heroicons/react/24/outline'
 import {ArrowRightIcon} from '@heroicons/react/20/solid'
 import {Button} from './button'
-import { useFormState, useFormStatus } from 'react-dom'
+import { useActionState } from 'react';
 import { authenticate } from '../lib/actions'
 import { useSearchParams } from 'next/navigation'
+
 
 
 export default function LoginForm(){
@@ -24,10 +25,10 @@ export default function LoginForm(){
     const searchParams = useSearchParams();
     const callbackUrl = searchParams.get('callbackUrl') || '/dashboard';
 
-    const [errorMessage, dispatch] = useFormState(authenticate, undefined)
+    const [errorMessage, formAction, isPending] = useActionState(authenticate, undefined)
 
     return(
-        <form className="space-y-3" action={dispatch}>
+        <form className="space-y-3" action={formAction}>
             <div className="flex-1 rounded-lg bg-gray-50 px-6 pb-4 pt-8">
                 <h1 className={`${lusitana.className} mb-3 text-2xl`}>
                 Connexion
@@ -76,7 +77,10 @@ export default function LoginForm(){
 
                 <input type="hidden" name="redirectTo" value={callbackUrl} />
 
-                <LoginButton />
+                {/**<LoginButton /> */}
+                <Button className='mt-4 w-full' aria-disabled = {isPending} >
+                  Connexion <ArrowRightIcon className='ml-auto h-5 w-5 text-gray-50' />
+               </Button>
 
                 {/**Affichage d'erreur lié à la connection */}
                 <div 
@@ -101,11 +105,11 @@ export default function LoginForm(){
 
 
 
-function LoginButton(){
-    const {pending} = useFormStatus();
-    return (
-        <Button className='mt-4 w-full' aria-disabled = {pending} >
-           Se connecter <ArrowRightIcon className='ml-auto h-5 w-5 text-gray-50' />
-        </Button>
-    )
-}
+// function LoginButton(){
+//     const {pending} = useFormStatus();
+//     return (
+//         <Button className='mt-4 w-full' aria-disabled = {pending} >
+//            Se connecter <ArrowRightIcon className='ml-auto h-5 w-5 text-gray-50' />
+//         </Button>
+//     )
+// }

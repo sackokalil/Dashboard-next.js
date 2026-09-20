@@ -10,7 +10,7 @@ export const config={
 
 
 
-//NB : en nextjs 16 le fichier middleware.ts a été renommé en proxy.ts, c'est tout ce qui change,
+//NB : en nextjs 16 le fichier middleware.ts(ici proxy.ts, après le upgrade, ce fichier est devenu proxy.ts) a été renommé en proxy.ts, c'est tout ce qui change,
 //le code reste le meme 
 
 /**

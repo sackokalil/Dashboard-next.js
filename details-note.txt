@@ -1,0 +1,486 @@
+Les notions abordées dans le projet backup/exercices :
+1)Les notion de layout, tailwindCss, module Css,clsx(pour la mise en forme conditionelle)
+2) les notion de fonts, d'Images
+3) Les routes dynamiques : [id]
+4) les catch-all segments : [...slug]
+5) Gestion d'erreur 404 avec not-found.js
+6) Routes Groupes
+7) ROUTE GROUPS ET MULTIPLE ROOT LAYOUTS(deconseiller pour un bon fonctionnement de Link pour la navigation-sinon les page se recharge à chaque fois-)
+
+
+
+
+
+
+
+
+
+
+
+=====================================================================================CRUCIAL NOTE=================================================================================
+
+ * Un Server Component peut appeler directement les fonctions d'un fichier data.ts pour lire la base, sans passer par une API(ou un route handler).
+
+ * Un server component qui traite du formulaire(ou effectue une mutaion-écrire dans la base: créer, modifier ou supprimer des données-) peut utiliser directement des 'server action' fonction pour l'interaction avec la base de données.(voir app/lib/actions.ts
+
+ * Un Client Component ne peut pas(ou dois pas) accéder directement à la base de données(aux fonctions d'interaction avec la base de données pour lire les données-dans un fichier data.ts par exempls-)pour lire les données : il doit utiliser un Route Handler 
+ * Pour créer, modifier ou supprimer des données,un Client Component peut déclencher une Server Action ou passer par un route handler
+
+ * Une Server Action importée dans un Client Component doit être définie dans un fichier séparé marqué "use server".
+
+
+
+Client Component + FastAPI :
+- fetch direct autorisé ;
+- Route Handler facultatif comme intermédiaire ;
+- Server Action surtout pour les mutations.
+
+Server Component + FastAPI :
+- fetch direct recommandé ;
+- Route Handler généralement inutile ;
+- Server Action utile pour une mutation déclenchée par l’utilisateur,
+  mais inutile pour une simple lecture pendant le rendu.
+
+
+
+SCENARIO COMPLET ET LA BONNE ORGANISATION D'UN CRUD EN UTILISANT SERVER ACTION: voir projet my-todo
+Ici le scenario est sur le CRUD todos:
+
+CREATE : (app/create-todo/page.tsx)=>client component traitant le formulaire d'ajout, doit donc utiliser 'useActionState' et une fonction server action definie dans le fichier (app/lib/actions.ts) pour le l'insertion à la base après la soumission du formulaire, cette fonction ne doit pas oublier 'revalidatePath('/todos')'avant son return.
+
+READ : (app/todos/page.tsx)=>server component s'addressant à la fonction de lecture des données de la base de données definies dans un fichier (app/lib/data.ts), la fonction ne doit pas oublier la fonction 'await connection()' pour le rendu dynamque de la page. la page (app/todos/page.tsx) map sur les données recuperer et les affiche avec les options de modification(voir UPDATE ci-dessous) et de suppression(voir DELETE ci-dessous). ces options sont des Components clients importés dans cette page (app/todos/page.tsx) auxquels l'id des éléments sont passé en form de props pour faciliter la recherche des elements et l'interaction avec les fonctions server action, vue que le edit et le delete sont des mutations de données.
+
+UPDATE : Le composant client(<UpdateTodo id={todo.id} /> de ButtonsIcons.tsx) de modification importé dans (app/todos/page.tsx) est un Link qui nous redirige vers la route et la page d'édition (/todos/id/edit => app/todos/[id]/edit/page.tsx)). cette page d'edition est un sever component qui reçoit l'id par params, recupere l'element concerné en s'adressant directement à la fonction dédié pour ça  definie dans (data.ts) puis passe ce element à un composant (<EditTodo todo={todo}/> de edit-form.tsx) client (le formulaire) en tant que props qu'il a importé et qu'il retourne. ce composant client préremplit le formulaire avec les donnée de l'élément(en creant un champs hidden pour id), le composant utilise aussi le hook 'useActionState' pour lier le formulaire à une fonction server action qui va se charger de l'update après la soumission.
+
+DELETE : le composant  client(<DeleteTodo id={todo.id} /> de ButtonsIcons.tsx) de suppression importé dans (app/todos/page.tsx) et qui reçoit l'id de l'element par props est un bouton 'button' qui import l'icone de suppression de heroicons et qui possède un onClick(), au clique du quel la fonction locale handleDelete() du composant est appélé, qui ensuite demande la confirmation de l'utilisateur et au cas échéant appèle la fonction server action(deleteTodo(id)) defini dans (app/lib/actions.ts) pour lui passé l'id afin que ce dernier supprime l'element.
+
+
+NB: à la fin de chaque fonction de mutation(les fonction server action) il est recommander de 'revalidatePath('/todos')'
+
+========================================================================================================================================================================================
+
+
+
+
+
+
+
+
+
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+LES NOTIONS ABORDES DANS LE PROJET my-todo : SERVER ACTION
+1)-les server action
+2)-externaliser les fichier action serveur: avec 'use sever' tout en haut du fichier
+3)-definition du schema de validation à l'aide de la bibliotheque Zod(voir zod.dev): (app/lib/actions.ts)
+4)-utilisation des hooks 'useActionstate '(app/create-todo/page.tsx)
+5)-utilisation du hook 'useRef' pour vider les champs du formulaire.
+6)-utilisation du hook 'useFormStatus'({pending}) pour desactiver le bouton pendant le traitement du formulaire(ce bouton doit etre un composant reutilisable qui est importer dans le composant parent-dans le formulaire-). il fait le mem role que le 'isPending' de 'useActionState'(sauf que dans ce dernier cas le bouton doit etre directement dans le composant parent, et nom importé, sinon dans ce cas on le lui passe comme prop) : (app/ui/Button.tsx, app/create-todo/page.tsx)
+NB: useFormStatus() est un hook React DOM qui permet à un composant enfant de connaître l’état du formulaire qui le contient:
+		
+		const status = useFormStatus(); const { pending } = useFormStatus();
+l'objet status contient:
+			{
+  pending,
+  data,
+  method,
+  action
+}
+useFormStatus() doit etre utilisé dans un composant enfant
+
+7)L'utilisation du hook 'revalidatePath' : par exemple dans notre cas, revalidatePath('/todos') est indiqué à la fin de la fonction createTodo() juste avant le return, cela aide à nextjs, au cas ou la route '/todos' à déjà mis les données dans le cache, de prendre en compte la todo qui vient juste d'etre créer lors de l'affichage des todos sur la route('/todos') et ne pas juste renvoyer les données de cache associé auparavant avec cette route. dans la route '/create-todo', après la soumission du formulaire et l'affichage du toast, on est redirigé directement vers '/todos'; mais il est possible que cette route affiche uniquement les données de cache qui en était associé sans prendre compte de la nouvelle todo qui vient à peine d'etre créée, c'est pourquoi dans la fonction server qui permet la création du todo on utilise juste avant le return le hook 'revalidatePath', pour oublier l'anciennes données de cache et refaire la requete à nouveau. donc route.push('/todos') et revalidatePath('/todos') sont en quelque sorte complementaire(voir les fonction action server de app/lib/actions.ts)
+
+SCENARIO COMPLET ET DE LA BONNE ORGANISATION D'UN CRUD EN UTILISANT SERVER ACTION: voir ce projet
+Ici le scenario est sur le CRUD todos:
+
+CREATE : (app/create-todo/page.tsx)=>client component traitant le formulaire d'ajout, doit donc utiliser 'useActionState' et une fonction server action definie dans le fichier (app/lib/actions.ts) pour le l'insertion à la base après la soumission du formulaire, cette fonction ne doit pas oublier 'revalidatePath('/todos')'avant son return.
+
+READ : (app/todos/page.tsx)=>server component s'addressant à la fonction de lecture des données de la base de données definies dans un fichier (app/lib/data.ts), la fonction ne doit pas oublier la fonction 'await connection()' pour le rendu dynamque de la page. la page (app/todos/page.tsx) map sur les données recuperer et les affiche avec les options de modification(voir UPDATE ci-dessous) et de suppression(voir DELETE ci-dessous). ces options sont des Components clients importés dans cette page (app/todos/page.tsx) auxquels l'id des éléments sont passé en form de props pour faciliter la recherche des elements et l'interaction avec les fonctions server action, vue que le edit et le delete sont des mutations de données.
+
+UPDATE : Le composant client(<UpdateTodo id={todo.id} /> de ButtonsIcons.tsx) de modification importé dans (app/todos/page.tsx) est un Link qui nous redirige vers la route et la page d'édition (/todos/id/edit => app/todos/[id]/edit/page.tsx)). cette page d'edition est un sever component qui reçoit l'id par params, recupere l'element concerné en s'adressant directement à la fonction dédié pour ça  definie dans (data.ts) puis passe ce element à un composant (<EditTodo todo={todo}/> de edit-form.tsx) client (le formulaire) en tant que props qu'il a importé et qu'il retourne. ce composant client préremplit le formulaire avec les donnée de l'élément(en creant un champs hidden pour id), le composant utilise aussi le hook 'useActionState' pour lier le formulaire à une fonction server action qui va se charger de l'update après la soumission.
+
+DELETE : le composant  client(<DeleteTodo id={todo.id} /> de ButtonsIcons.tsx) de suppression importé dans (app/todos/page.tsx) et qui reçoit l'id de l'element par props est un bouton 'button' qui import l'icone de suppression de heroicons et qui possède un onClick(), au clique du quel la fonction locale handleDelete() du composant est appélé, qui ensuite demande la confirmation de l'utilisateur et au cas échéant appèle la fonction server action(deleteTodo(id)) defini dans (app/lib/actions.ts) pour lui passé l'id afin que ce dernier supprime l'element.
+
+NB: à la fin de chaque fonction de mutation(les fonction server action) il est recommander de 'revalidatePath('/todos')'
+
+
+
+
+
+
+
+
+
+
+
+
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+LES NOTIONS ABORDEES DANS LE PROJET dashboard : Avec SERVER ACTION
+
+1)creation et application de la fil d'ariane : (app/dashboard/invoices/page.tsx)
+2) Utilisation de zod pour definir le schema des données recupéré à partir d'un formulaire pour qu'ils correspondent au type des colonne de la table: voir (app/lib/actions.ts=>createInvoice)
+3) utilisation de la fonction omit() sur le schema defini pour definir un nouveau schema tout en omettant les champs qui ne sont pas recu du formulaire(qui doivent etre generé automatiquement par exemple, ou calculer autrement: comme le id et la date par exemple). mais toute fois le schema des données de la base doit etre d'abord defini et en suite omettre ceux dont le formulaire n'a pas envoyé.
+4) generation de la date avec const date = new Date().toISOString().split('T')[0]
+5)Utilisation de la fonction bind(null, id) pour vehiculer autre information à une fonction server action comme id par exemple, pour eviter de créer un champs hidden dans le formulaire et ainsi soumettre l'id de la facture, ce qui peut etre dangereux.
+6)NB: dans une fonction server action, le 'redirect()' doit etre à tout pris en dehors du block try-catch()
+7) l'utilisation de (error.tsx) pour laisser un message à l'utilisateur en cas d'erreur. Le fichier error.tsx doit à tout pris être un composant client. et ce composant(la fonction) reçoit deux props : {error, reset}:{error:Error & {digest?:string}, reset:()=>void}.
+ce & {digest?:string} et biensure facultatif.
+
+error : est l'erreur intercepté par nextjs(par exemple à travers les throw new Error('...') qu'on definit dans nos try-catch() ) et error.message et le message d'erreur en question
+
+digest : Le digest est un identifiant que Next.js peut associer à certaines erreurs, notamment pour faciliter leur identification côté serveur.
+
+reset : fonction fournie automatiquement par Next.js à error.tsx. Lorsqu’on l’appelle, Next.js essaie d’afficher à nouveau la page qui avait provoqué l’erreur. Si l’erreur était temporaire, la page peut alors fonctionner normalement. voir (app/dashboard/invoices/error.tsx)
+
+Le contenu retourné par ce fichier(composant) est celui qui sera affiché aux utilisateur en cas d'erreur.
+
+8) L'utilisation de la fonction notFound() et le fichier (not-found.tsx) pour capturer les erreur.
+9) utilisation de safeParse() de zod pour valider l'id sinon lever un notFound():(app/dashboard/invoices/[id]/edit/page.tsx
+10)Utilisation de ESLINT pour amelioration de l'app : ajouter dans package.json, dans les script:
+"lint" : "next lint" puis executer la commande : npm run lint   pour voir s'il existe des erreur ou des warning lint. cela est important pour detecter par exemple si l'on a oublier des atributs 'alt' d'un composant image par exemple
+11) validation avancé des données coté serveur(server action, pendant CREATE ET UPDATE) avec zod (app/lib/action.tsx)=>lire surtout les commentaire au niveau de la definition du schema pour la version v4 de zod
+
+12) Authentification dans nextjs en utilisant 'next-auth', pour la configuration voir la section (AUTHENTIFICATION EN NEXTJS  ET LES EVENTUELLES CONFIGURATIONS AVEC 'next-auth') du fichier notes.txt
+13) gestion de la connexion et deconnexion avec des fonction action server.
+
+14) Utilisation de 'useFormStatus' dans un composant button d'un formulaire(le button est un composant importé dans le formulaire-le button submit-) pour desactivé 'aria-disabled' lors que le formulaire est pending(en cours de soumission). voir (app/ui/login-form.tsx)=>LoginButton
+15) utilisation de 'new URL()' sous la forme (new URL(url, base)) : (auth.config.ts):
+    new URL('/dashboard', 'nextUrl = http://localhost:3000/login')=> http://localhost:3000/dashboard
+16) recuperation du callbackUrl dans le formulaire de login et sa soumission dans le formData à travers un champs hidden, lors que le user veut se rendre dans ce callbackUrl alors qu'une authentification est requis.(voir => app/ui/login-form.tsx, lire comments).
+17) utilisation du param 'redirectTo' dans la fonction 'signOut' pour la redirection après le log out. (voir=> app/ui/dashboard/sidenav.tsx=>logout: app/lib/actions.ts->logout )
+18) Deconnexion automatique après un certain temps d'inactivité: un composant client doit etre créé(qui surveille l'activité de user) et importé dans le layout de la partie de l'application qui est protégé par une authentification(dans notre cas le /dashbord/...) pour garantir déjà qu'il ne s'exécute que lorsque quelqu'un est connecté. (voir app/dashboard/IdleLogout.tsx, app/dashboard/layout.tsx)
+19) L'utilisation des metadata. on peut definir les metadata dans un fichier layout.tsx(de ce fait toutes les page enfant. heriteront ces metadata, et si un enfant defini ses propres metadata, cela ecrase ceux du parent). Une bonne façon de definir les metadata statique est par exemple de definir le metadata dans le layout.tsx tout en ajoutant un template pour les éléments qui seront dans ce cas en fonction des page defini. (voir app/layout.tsx, app/dashboard/invoices/page.tsx).----Pour définir les metadonnées dynamique on doit definir la fonction generateMetadata()(soit dans les layout.tsx oubien dans les page.tsx, elle n'est prise en charge que dans un composant server.)
+
+definir metadata dynamique avec la fonction generateMetadata() et la fonction generateStaticParams()(qui est la meilleur solution pour les route dynamique, pour créer les page static correspondantes au diferents id des articles lors du build et ainsi optimiser l'affichage rapide de celles-ci ) : (voir le projet : exercice1 : src/app/[postId]/page.js)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+Les notions abordées dans le projet 'backup/dashboard'
+1)Utilisation de neon postgres dans un projet Nextjs: lire la section: CONFIGURATION DE BASE DE DONNEES ET DEPLOIEMENT DU PROJET NEXT JS SUR VERCEL du fichier notes.txt
+3) la nouvelle façons de faire les requeste qui retourne un type de données:
+	avant : const data = await sql<Type>`requete ici`: 
+	maintenant: const data = await sql`requête ici` puis à la fin de la fonction : return data as Type.
+4) dans neons postgres, on a acces directement à ligne retournées par la requete sur data et non sur data.rows(comme avant), voir le projet 'dashboard' : app/lib/data.ts(les commentaires)
+5) NB: si les requete sont indépendantes, il est mieux de faire une requete parallele, c'est à dire au lieu de : 
+
+    const {totalPaidInvoices, totalPendingInvoices, totalCustomers, totalInvoices} = await fetchCardData()
+    const revenue = await fetchRevenue();
+    const latestInvoices = await fetchLatestInvoices()
+
+ qui va ralentire l'execution, il fait leur faire en parallèle avec Promise.all([liste des appels ici]), on aura donc: 
+
+    const cardDataPromise = fetchCardData();
+    const revenuePromise = fetchRevenue();
+    const latestInvoicesPromise = fetchLatestInvoices(); //sans les await ici(le await dans Promise.all()) ; puis :
+
+	
+	const [cardData, revenue, latestInvoices] = await Promise.all([
+  			cardDataPromise,
+  			revenuePromise,
+  			latestInvoicesPromise,
+		]);
+
+Oubien tout simplement : 
+
+
+	const [cardData, revenue, latestInvoices] = await Promise.all([
+  			fetchCardData(),
+  			fetchRevenue(),
+  			fetchLatestInvoices(),
+		]);
+
+
+		const {
+  		totalPaidInvoices,
+ 		totalPendingInvoices,
+  		totalCustomers,
+  		totalInvoices,
+	} = cardData;
+
+6) Streaming de page dans next.js avec loading.tsx, et d'un composant precis : voir le projet 'dashboard'(app/dashboard/page.tsx), et lire la section : STREAMING DE PAGE EN NEXT.JS AVEC loading.tsx du fichier 'notes.txt'
+7) streaming d'un groupe de composant identique, en regroupant ceux-ci dans un wrapper et en créant un Skeleton unique pour eux: lire le comment du projet 'dashboard'(app/dashboard/page.tsx)
+8) pour que le loading.tsx soit uniquement pour le dashbard et non pour customers et invoices on a créer un groupe de route (overview) et y deplacé le page.tsx du dashbard et le loading.tsx
+9) Exemple d'utilisation du hook useSearchParams(), new URLSearchParams() avec router.replace() pour une recherche sans rechargement de la page: voir (app/ui/search.tsx) 
+10) Utilisation de 'ILIKE', 'JOIN' dans une requete SQL(Exemple de rechercher optimisé : app/dashboard/invoices/page.tsx,  app/ui/search.tsx 
+11) Utilisation du package 'use-debounce'(useDebouncedCallback) pour parametrer un minuteur afin d'éviter que la fonction onChange() du composant Search(app/ui/search.tsx) se declanche à chaque frappe de la touche: npm install use-debounce
+12) la pagination : voir (app/lib/data.ts->fetchInvoicesPages(query:string)), (app/ui/invoices/pagination.tsx)
+
+SCENARIO COMPLET DE LA RECHERCHE, AFFICHAGE ET LA PAGINATION DES FACTURES:
+-la route (/dashboard/invoices) nous mène vers la page app/dashboard/invoices/page.tsx.
+cette page fait ces action suivantes : 
+	-recupere le searchParams(qui est au tout debut-avant qu'on ne fasse une rechercher dans le champs de rechercher- un objet vide), elle recuperer les parametre query et currentPage s'ils existent sinon elle prend à la place les valeurs '' et 1(une chaine vide pour query et la valeur 1 pour currentPage).
+	-La page recupere de meme le nombre total de pages sachant qu'on veuille afficher 6 factures par page.
+	-La page passe à son composant enfant(Table) les parametre query et currentPage pour que ce dernier puisse recuperer les facture dans la base de donner tout en limitant le nombre à 6 et en ne prenant qua partir de la facture situé à la ((currentPage - 1) * 6))ème position puis les afficher dans une table.
+	-La page integre également un composant de rechercher(Search): le role de ce dernier est de changer automatiquement l'url une fois qu'on tape un mot(query) dans le champs de recher, il procède cela comme suit:
+	-il recupere le searchParams, il ajoute un param page=1, il recupere le mot qu'on a taper dans le champs de recherche puis ajoute un param query avec ce mot, et il reconstitue la route avec le pathname(recuperé à travers le useRouter) et les params, puis il redirige automatiquement la requete sur cette route-qui correspond exactement celle menant vers la page.tsx(celui-ci fait de nouveau sont travail).
+	-la page integre également un composant Pagination.Elle fourni à ce dernier aussi le nombre total de page que constitue les facture(totalPages), ce dernier aussi à son tour recupère le param page pour currentPage, appèle la fonction generatePagination pour avoir toutes les pages puis retourne la pagination numeroté avec les flèche de gauche et de droite cliquable(voir app/ui/invoices/pagination.tsx) pour plus de detail.
+
+
+
+
+
+
+
+
+
+
+
+
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Les notions abordées dans le projet "backup/my-Todo":
+1) Interaction et utilisation de react-toastify et le hook useRouter de next/navigation : app/create-todo/page.tsx
+2) : utilisation du hook "useEffect" : app/todos/page.tsx
+3) recuperation des searchParams dans une page.tsx(ce qui est différent de celui d'une route.ts) avec le hook useSearchParam ou avec le destructuring {searchParams}:{searchParams:Promise<...>} dans le parametre de la fonction : app/todos/edit/page.tsx
+4)recuperation du parametre de la route dynamique dans un fichier route.js avec (_request:Request, {params}:{params: Promise<{id:string}>})
+5) on peut aussi utiliser le Link pour le routage dynamique au lieu de useRouter:
+	<Link href={{pathname: '/todos/edit', query:{id:todo.id}}}><PencilSquareIcon style={{width:'20px'}} /></Link>
+	ainsi le link sera constitué comme : /todos/edit?id=....; voir app/todos/page.tsx
+6)utilisation de window.confirm(), dans handleDelete() du fichier app/todos/page.tsx
+7)NB: la bonne organisation des api et pages(ce qui n'est pas le cas dans ce projet) est : 
+
+	app/api/todos/route.ts       → GET + POST => pour CREATE ET READ
+	app/api/todos/[id]/route.ts  → GET + PATCH + DELETE => pour READ(une ressource unique), UPDATE ET DELETE
+
+	app/todos/page.tsx              → GET /todos (afficher la liste)
+	app/todos/create/page.tsx       → GET /todos/create (formulaire de création)
+	app/todos/[id]/edit/page.tsx    → GET /todos/123/edit (formulaire d’édition)
+
+8)window.location.reload(): le navigateur ne provoque pas un simple nouveau rendu React. Il détruit complètement la page actuelle, puis la recharge depuis le début. cela provoque l'execution de useEffect() à nouveau même s'il n'a pas de dependance.
+
+9) Si le page.tsx est un server component, alors on a pas besoin de créer des api, on peut tout simplement créer un fichier data.js dans un dossier lib dans app et y mettre notre DA code(data access codes) qui sera ensuite appélé par notre server page.tsx.
+Mais si la page.tsx est un client component, alors il faut créer des api(qui vont acceder au données de la bd)avec qui il peut communiqué, oubien utiliser les ServerAction.
+
+
+NB: 
+- La recuperation d'un parametre dynamique(api/todos/[id]/route.ts, /api/todos/2/, ici j'ai donné juste exemple pour la route) se fait de la même façon et dans un fichier page.tsx et dans un fichier route.ts et se fait comme ça:
+
+pour route.ts:
+
+async function GET(_request : Request, {params}:{params: Promise<{id:string}>}) puis dans la fonction:
+const {id} = await params
+
+
+pour page.tsx:
+
+async function Page({params}:{params: Promise<{id:string}>}) puis dans la fonction : 
+const {id} = await params
+
+
+
+- La recuperation des searchParams(/todos/edit?id=...) se fait differemment dans les deux cas, on procede comme suit:
+
+pour route.ts:
+
+async function GET(request : NextRequest) puis dans la fonction:
+const id =  request.nextUrl.searchParams.get('id') ou bien:
+
+async function GET(request : Request) puis dans la fonction:
+const id = new URL(request.url).searchParams.get('id')
+
+
+pour page.tsx :
+
+async function Page({searchParams}:{searchParams:Promise<{id: string }>}) puis dans la fonction : 
+const {id} = (await searchParams) oubien:
+
+en utilisant le hook useSearchParams de next/navigation:
+function Page() puis dans la fonction : 
+const searchParams = useSearchParams()
+const todoId = searchParams.get('id')
+
+NB: pour un composant client qui n'est pas un page.tsx, il faut utiliser cette deuxieme methode(avec le hook) sinon ça ne marchera pas
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+Les notions abordées dans le projet exercice1 :
+1) le hook usePathname(pour montrer au user sur quel lien de navigation il se trouve).
+2) Interaction avec une API(comme json place holder).
+3)exemple d'interaction avec un petit champs de recherche des posts:
+	les elements consernés ici : 
+app/
+ * ├── posts/
+ * │   ├── page.js
+ * │   └── api/
+ * │       ├── route.js
+ * │       └── search/
+ * │           └── route.js
+ * │
+ * └── components/
+ *     ├── Post.js
+ *     └── Search.js
+lire section : "RECHERCHE, QUERY PARAMETERS, useState ET COMMUNICATION
+ * ENTRE COMPOSANTS - NEXT.JS / REACT" du fichier notes.txt pour mieux comprendre
+
+4)Headers et cookies dans les routes handlers :lire la section :  HEADERS ET COOKIES DANS LES ROUTE HANDLERS - NEXT.JS  du fichier notes.txt pour mieux comprendre
+
+5) RENDU STATIQUE ET RENDU DYNAMIQUE : voir projet : exercice1(src/app/ page.js)
+
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------
+| Outil                                    | Portée                      | Effet principal                                                                      |
+| ---------------------------------------- | --------------------------- | ------------------------------------------------------------------------------------ |
+| `await connection()`( de 'next/server')  | Code situé après l’appel    | Attend une vraie requête utilisateur et empêche le prérendu statique de cette partie |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `cache: "no-store"`                      | Un seul `fetch()`           | Ne met pas la réponse de ce `fetch()` en cache cette option est passée dans le       |
+|                                          |                             | deuxième argument de `fetch()`                                                       |
+|------------------------------------------|-----------------------------|--------------------------------------------------------------------------------------|
+| `export const dynamic = "force-dynamic"` | Toute la route              | Force le rendu dynamique de la route à chaque requête, doit etre placé tout en haut  |                               |                                          |                             | du fichier route.ts après l'import                                                   |
+|---------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `export const revalidate = 0`            | Toute la route              | Désactive la conservation périodique de la route et force son rendu dynamique        |
+|                                          |                             | doit etre placé tout en haut du fichier route.ts après l'import                      |                                                                              
+|------------------------------------------|-----------------------------|--------------------------------------------------------------------------------------|
+| `next: { revalidate: 0 }`                | Un seul `fetch()`           | Met la réponse en cache et autorise son actualisation après 0 secondes               | 
+|                                          |                             | il fait la meme chose que cache: 'no-store' passé ds 2èm arg `fetch() aussi          |
+|------------------------------------------|-----------------------------|--------------------------------------------------------------------------------------|
+| `export const revalidate = 60`           | Toute la route              | Définit une durée de réactualisation par défaut pour la route                        |
+|------------------------------------------|-----------------------------|--------------------------------------------------------------------------------------|
+| `cache: "force-cache"`                   | Un seul `fetch()`           | Force la mise en cache de cette requête                                              |
+|------------------------------------------|-----------------------------|--------------------------------------------------------------------------------------|
+| `"use cache"`                            | Fonction, composant ou page | Active explicitement le cache avec Cache Components(si celui-ci activé dans next.config)
+----------------------------------------------------------------------------------------------------------------------------------------------------------------| 
+| `cacheLife()`              		   |utilisé avec 'use cache'     | Définit la durée de vie du cache créé avec `"use cache"`                             |
+|------------------------------------------|--------------------------------------------------------------------------------------------------------------------|
+| `cacheTag()`                             |utilisé avec 'use cache'    | Associe une ou plusieurs étiquettes au cache afin de pouvoir l’invalider ensuite      |
+|---------------------------------------------------------------------------------------------------------------------------------------------------------------|
+
+NB: 
+-dans les ancienne version de next.js(comme 14), c'était 'unstable_noStore'de 'next/cache' qui était utilisé: voir projet 'dashboard'(app/lib/data.ts)
+-IL y'a des fonctions dont l'utilisation oblige implicitement le rendu dynamique, c'est à dire qu'une fois utilisé, le rendu de la route se fera automatiquement de façon dynamique, comme : cookies(), headers(), le prop searchParams.
+- Les routes POST sont automatiquement dynamique aussi.
+
+6)definir metadata dynamique avec la fonction generateMetadata() et la fonction generateStaticParams()(qui est la meilleur solution pour les route dynamique, pour créer les page static correspondantes au diferents id des articles lors du build et ainsi optimiser l'affichage rapide de celles-ci ) : (voir src/app/[postId]/page.js)
+
+
+
+await connection()
+→ empêche le prérendu statique et attend une requête utilisateur.
+→ agit sur l’exécution du composant ou de la route.
+
+cache: "no-store"
+→ empêche la mise en cache d’un fetch précis.
+→ agit uniquement sur la réponse de cette requête HTTP.
+
+
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+===================QUELLEQUES NOTES IMPORTANTES:============================
+
+/**
+ * DOSSIERS PRIVÉS ET SEGMENTS DE ROUTE DANS NEXT.JS
+ *
+ * Dans le dossier app/, les sous-dossiers représentent les segments
+ * qui permettent de construire l'arborescence des routes.
+ *
+ * Un segment devient une page accessible lorsqu'il contient un page.js
+ * (ou page.jsx, page.tsx).
+ *
+ * Exemple :
+ *
+ * app/
+ * └── blog/
+ *     └── page.js
+ *
+ * → accessible avec : /blog
+ *
+ *
+ * DOSSIER PRIVÉ (_folder) :
+ *
+ * Si le nom d'un dossier commence par un underscore "_",
+ * Next.js considère ce dossier comme un dossier privé (Private Folder).
+ *
+ * Exemple :
+ *
+ * app/
+ * └── _components/
+ *     └── page.js
+ *
+ * Même s'il contient page.js, ce dossier et ses sous-dossiers
+ * sont exclus du système de routage.
+ *
+ * Donc :
+ * /_components   ❌
+ * /components    ❌
+ *
+ * Cela permet d'organiser et de colocaliser dans app/ des fichiers
+ * ou composants qui ne doivent pas devenir des routes.
+ *
+ * À retenir :
+ *
+ * blog/         → peut participer au routage
+ * _components/  → dossier privé, exclu du routage
+ *
+ * Le "_" signifie donc à Next.js :
+ * "ce dossier sert à l'organisation du projet, pas au routage."
+ */

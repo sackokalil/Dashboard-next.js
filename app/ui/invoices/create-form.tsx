@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { Button } from '@/app/ui/button'
 import { CustomerField } from '@/app/lib/definitions'
 import { createInvoice } from '@/app/lib/actions'
-import { useFormState } from 'react-dom'
+import { useActionState } from 'react';
 import { State } from '@/app/lib/actions'
 
 function Form({customers}:{customers:CustomerField[]}) {
@@ -16,7 +16,7 @@ function Form({customers}:{customers:CustomerField[]}) {
         errors : {}
     }
     //en next 15+ / const [state, dispatch, isPending] = useActionState(createInvoice, initialState)
-    const [state, dispatch] = useFormState(createInvoice, initialState)
+    const [state, dispatch] = useActionState(createInvoice, initialState)
     //const [state, dispatch] = useFormState(createInvoice.bind(null, id), initialState); si l'on voulait fournir d'autre param au server action function 
 
     return (

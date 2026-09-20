@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { Button } from '@/app/ui/button'
 import { CustomerField, InvoiceForm } from '@/app/lib/definitions'
 import { updateInvoice } from '@/app/lib/actions'
-import { useFormState } from 'react-dom'
+import { useActionState } from 'react';
 import { State } from '@/app/lib/actions'
 
 function Form({customers, invoice}:{customers:CustomerField[], invoice : InvoiceForm}) {
@@ -15,7 +15,7 @@ function Form({customers, invoice}:{customers:CustomerField[], invoice : Invoice
         message: null
     }
     //en next 15+ : const [state, dispatch, isPending] = useActionState(updateInvoice.bind(null, invoice.id), initialState)
-    const [state, dispatch] = useFormState(updateInvoice.bind(null, invoice.id), initialState)
+    const [state, dispatch] = useActionState(updateInvoice.bind(null, invoice.id), initialState)
 
     ///console.log(state)
 

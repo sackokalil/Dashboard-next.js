@@ -11,37 +11,34 @@ export const metadata : Metadata = {
 }
 
 
-export default async function page({params}:{params:{id:string}}) {
+export default async function page({params}:{params: Promise<{id:string}>}) {
+  const {id} = await params;
 
-    //en nextjs 15+ params serait une promise: ...page({params}:{params:Promise<{id:string}>}) 
-    //const {id} = await params
-    const id = params.id //ici c'est react 14
+  //safeParse() retourne un objet de ce genre:
+  /*
+    si valide
+    {
+      success: true,
+      data: "550e8400-e29b-41d4-a716-446655440000"
+    }  
 
-    //safeParse() retourne un objet de ce genre:
-    /*
-      si valide
-      {
-        success: true,
-        data: "550e8400-e29b-41d4-a716-446655440000"
-      }  
-
-      Si invalide
-      {
-        success: false,
-        error: // ZodError 
-      }
-      
-    */ 
-    const idShema = z.string().uuid();
-    const parsedId = idShema.safeParse(id)
-    if(!parsedId.success){
-      notFound()
+    Si invalide
+    {
+      success: false,
+      error: // ZodError 
     }
+    
+  */
+  const idShema = z.string().uuid();
+  const parsedId = idShema.safeParse(id)
+  if(!parsedId.success){
+    notFound()
+  }
 
-    const [invoice, customers] = await Promise.all([fetchInvoiceById(id), fetchCustomers()])
-    if(!invoice){
-      notFound()
-    }
+  const [invoice, customers] = await Promise.all([fetchInvoiceById(id), fetchCustomers()])
+  if(!invoice){
+    notFound()
+  }
 
 
   return(
